@@ -58,4 +58,38 @@ void main() {
     expect(recs.length, 1);
     expect(recs.first.id, '2');
   });
+
+  test('DocumentItem hỗ trợ đầy đủ các trường vị trí và tọa độ GPS', () {
+    final now = DateTime.now();
+    final doc = DocumentItem(
+      id: 'doc-geo-1',
+      ownerId: 'user-1',
+      title: 'Giáo trình Cấu trúc dữ liệu',
+      subject: 'CNTT',
+      docType: 'bai_giang',
+      author: 'Khoa CNTT',
+      year: 2025,
+      createdAt: now,
+      updatedAt: now,
+      tags: ['cntt', 'ctdl'],
+      locationLabel: 'Thư viện A1, kệ 4',
+      latitude: 21.028511,
+      longitude: 105.854167,
+    );
+
+    expect(doc.locationLabel, 'Thư viện A1, kệ 4');
+    expect(doc.latitude, closeTo(21.0285, 0.001));
+    expect(doc.longitude, closeTo(105.854, 0.001));
+    expect(doc.tags, contains('cntt'));
+
+    final map = doc.toMap();
+    expect(map['location_label'], 'Thư viện A1, kệ 3' == doc.locationLabel ? true : 'Thư viện A1, kệ 4');
+    expect(map['latitude'], 21.028511);
+    expect(map['longitude'], 105.854167);
+
+    final fromMap = DocumentItem.fromMap(map, currentUserId: 'user-1');
+    expect(fromMap.latitude, 21.028511);
+    expect(fromMap.longitude, 105.854167);
+    expect(fromMap.tags, ['cntt', 'ctdl']);
+  });
 }

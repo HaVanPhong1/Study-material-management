@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/document_item.dart';
 import '../services/document_service.dart';
+import 'map_screen.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final DocumentItem document;
@@ -17,7 +19,10 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   late TextEditingController _subjectController;
   late TextEditingController _authorController;
   late TextEditingController _yearController;
+  late TextEditingController _tagsController;
+  late TextEditingController _locationController;
   late String _selectedDocType;
+  LatLng? _selectedLatLng;
   bool _isSaving = false;
 
   @override
@@ -27,7 +32,33 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     _subjectController = TextEditingController(text: widget.document.subject);
     _authorController = TextEditingController(text: widget.document.author);
     _yearController = TextEditingController(text: widget.document.year.toString());
+    _tagsController = TextEditingController(text: widget.document.tags.join(', '));
+    _locationController = TextEditingController(text: widget.document.locationLabel ?? '');
     _selectedDocType = widget.document.docType;
+    if (widget.document.latitude != null && widget.document.longitude != null) {
+      _selectedLatLng = LatLng(widget.document.latitude!, widget.document.longitude!);
+    }
+  }
+
+  Future<void> _pickLocationOnMap() async {
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapScreen(
+          mode: MapScreenMode.pickLocation,
+          initialLocation: _selectedLatLng,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedLatLng = result;
+        if (_locationController.text.trim().isEmpty) {
+          _locationController.text = 'Tọa độ: ${result.latitude.toStringAsFixed(5)}, ${result.longitude.toStringAsFixed(5)}';
+        }
+      });
+    }
   }
 
   Future<void> _submitUpdate() async {
@@ -51,6 +82,10 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         docType: _selectedDocType,
         author: _authorController.text.trim(),
         year: year,
+        tags: parseTags(_tagsController.text),
+        locationLabel: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+        latitude: _selectedLatLng?.latitude,
+        longitude: _selectedLatLng?.longitude,
       );
 
       if (mounted) {
@@ -176,6 +211,84 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 14),
+
+              // Gắn thẻ (Tagging)
+              _buildTextField(
+                controller: _tagsController,
+                label: 'Thẻ phân loại (cách nhau bằng dấu phẩy)',
+              ),
+              const SizedBox(height: 14),
+
+              // Vị trí vật lý (Location)
+              _buildTextField(
+                controller: _locationController,
+                label: 'Vị trí vật lý (kệ, phòng, thư viện)',
+              ),
+              const SizedBox(height: 8),
+
+              // Tọa độ GPS
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.map_outlined, size: 18, color: Color(0xFF38BDF8)),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Tọa độ GPS vật lý (Bản đồ):',
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const Spacer(),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: _pickLocationOnMap,
+                          icon: const Icon(Icons.pin_drop_rounded, size: 15),
+                          label: Text(_selectedLatLng != null ? 'Đổi tọa độ' : 'Ghim trên bản đồ'),
+                        ),
+                      ],
+                    ),
+                    if (_selectedLatLng != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+                            ),
+                            child: Text(
+                              'Lat: ${_selectedLatLng!.latitude.toStringAsFixed(5)}, Lng: ${_selectedLatLng!.longitude.toStringAsFixed(5)}',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF10B981), fontFamily: 'monospace'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 16, color: Colors.white54),
+                            tooltip: 'Xóa tọa độ',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => setState(() => _selectedLatLng = null),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 28),
 

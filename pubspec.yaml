@@ -38,6 +38,8 @@ dependencies:
   uuid: ^4.6.0
   file_picker: 8.1.7
   url_launcher: ^6.3.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:

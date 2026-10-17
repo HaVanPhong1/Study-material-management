@@ -74,6 +74,7 @@ class DocumentService {
     String? subject,
     int? yearFrom,
     int? yearTo,
+    String? tag,
   }) async {
     final currentUser = AuthService().currentUser;
     if (currentUser == null) return [];
@@ -135,14 +136,23 @@ class DocumentService {
         ));
       }
 
-      // Lọc từ khóa theo title hoặc author
+      // Lọc từ khóa theo title, author, subject, tag hoặc vị trí
       if (keyword != null && keyword.trim().isNotEmpty) {
-        final kw = keyword.trim().toLowerCase();
+        final kw = keyword.trim().toLowerCase().replaceAll(RegExp(r'^#'), '');
         results = results.where((d) =>
             d.title.toLowerCase().contains(kw) ||
             d.author.toLowerCase().contains(kw) ||
-            d.subject.toLowerCase().contains(kw)).toList();
+            d.subject.toLowerCase().contains(kw) ||
+            d.tags.any((t) => t.toLowerCase().contains(kw)) ||
+            (d.locationLabel != null && d.locationLabel!.toLowerCase().contains(kw))).toList();
       }
+
+      // Lọc theo tag được chọn
+      if (tag != null && tag.trim().isNotEmpty) {
+        final targetTag = tag.trim().toLowerCase();
+        results = results.where((d) => d.tags.any((t) => t.toLowerCase() == targetTag)).toList();
+      }
+
       return results;
     }
 
@@ -193,11 +203,13 @@ class DocumentService {
 
     // Áp dụng bộ lọc
     if (keyword != null && keyword.trim().isNotEmpty) {
-      final kw = keyword.trim().toLowerCase();
+      final kw = keyword.trim().toLowerCase().replaceAll(RegExp(r'^#'), '');
       visible = visible.where((d) =>
           d.title.toLowerCase().contains(kw) ||
           d.author.toLowerCase().contains(kw) ||
-          d.subject.toLowerCase().contains(kw)).toList();
+          d.subject.toLowerCase().contains(kw) ||
+          d.tags.any((t) => t.toLowerCase().contains(kw)) ||
+          (d.locationLabel != null && d.locationLabel!.toLowerCase().contains(kw))).toList();
     }
     if (docType != null && docType.isNotEmpty) {
       visible = visible.where((d) => d.docType == docType).toList();
@@ -210,6 +222,10 @@ class DocumentService {
     }
     if (yearTo != null) {
       visible = visible.where((d) => d.year <= yearTo).toList();
+    }
+    if (tag != null && tag.trim().isNotEmpty) {
+      final targetTag = tag.trim().toLowerCase();
+      visible = visible.where((d) => d.tags.any((t) => t.toLowerCase() == targetTag)).toList();
     }
 
     return visible;
@@ -327,6 +343,10 @@ class DocumentService {
     required String docType,
     required String author,
     required int year,
+    List<String>? tags,
+    String? locationLabel,
+    double? latitude,
+    double? longitude,
   }) async {
     final currentUser = AuthService().currentUser;
     if (currentUser == null) throw Exception('Vui lòng đăng nhập.');
@@ -355,23 +375,29 @@ class DocumentService {
         createdAt: target.createdAt,
         updatedAt: DateTime.now(),
         permissionLevel: target.permissionLevel,
-        tags: target.tags,
-        locationLabel: target.locationLabel,
-        latitude: target.latitude,
-        longitude: target.longitude,
+        tags: tags ?? target.tags,
+        locationLabel: locationLabel ?? target.locationLabel,
+        latitude: latitude ?? target.latitude,
+        longitude: longitude ?? target.longitude,
       );
     }
 
     if (CloudConfig.isSupabaseConfigured) {
       final client = Supabase.instance.client;
-      await client.from('documents').update({
+      final updateData = <String, dynamic>{
         'title': title,
         'subject': subject,
         'doc_type': docType,
         'author': author,
         'year': year,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', documentId);
+      };
+      if (tags != null) updateData['tags'] = tags;
+      if (locationLabel != null) updateData['location_label'] = locationLabel;
+      if (latitude != null) updateData['latitude'] = latitude;
+      if (longitude != null) updateData['longitude'] = longitude;
+
+      await client.from('documents').update(updateData).eq('id', documentId);
     }
   }
 

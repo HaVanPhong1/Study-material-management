@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/document_service.dart';
 import 'edit_document_screen.dart';
 import 'login_screen.dart';
+import 'map_screen.dart';
 import 'share_screen.dart';
 import 'upload_screen.dart';
 
@@ -18,6 +19,7 @@ class DocumentListScreen extends StatefulWidget {
 class _DocumentListScreenState extends State<DocumentListScreen> {
   final _searchController = TextEditingController();
   String _selectedDocType = '';
+  String? _selectedTag;
   List<DocumentItem> _documents = [];
   List<DocumentItem> _recommendations = [];
   bool _isLoading = true;
@@ -35,6 +37,7 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
       final docs = await DocumentService().getDocuments(
         keyword: _searchController.text.trim(),
         docType: _selectedDocType.isEmpty ? null : _selectedDocType,
+        tag: _selectedTag,
       );
       final recs = await DocumentService().recommendations();
       setState(() {
@@ -225,6 +228,21 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Xem bản đồ vị trí tài liệu',
+            icon: const Icon(Icons.map_rounded, color: Color(0xFF10B981)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MapScreen(
+                    mode: MapScreenMode.viewDocuments,
+                    documents: _documents,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'Đổi tài khoản kiểm thử (RLS)',
             icon: const Icon(Icons.switch_account_rounded, color: Color(0xFF38BDF8)),
             onPressed: _switchUserDialog,
@@ -280,6 +298,9 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
               ],
             ),
           ),
+
+          // Bộ lọc Thẻ (Tag Filter Bar động từ các tài liệu đang có)
+          _buildTagFilterBar(),
 
           if (_recommendations.isNotEmpty) ...[
             Padding(
@@ -368,6 +389,66 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
           );
           if (res == true) _loadDocuments();
         },
+      ),
+    );
+  }
+
+  Widget _buildTagFilterBar() {
+    // Thu thập danh sách tag duy nhất từ các tài liệu đang tải
+    final allTags = <String>{};
+    for (final doc in _documents) {
+      allTags.addAll(doc.tags);
+    }
+
+    if (allTags.isEmpty && _selectedTag == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tag_rounded, size: 14, color: Color(0xFF64748B)),
+              const SizedBox(width: 4),
+              const Text('Tag:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+              const SizedBox(width: 6),
+              if (_selectedTag != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: InputChip(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: const Color(0xFF0284C7),
+                    label: Text('#$_selectedTag', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                    onDeleted: () {
+                      setState(() => _selectedTag = null);
+                      _loadDocuments();
+                    },
+                    deleteIconColor: Colors.white,
+                  ),
+                ),
+              ...allTags.where((t) => t != _selectedTag).map((t) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: const Color(0xFF1E293B),
+                    side: const BorderSide(color: Color(0xFF334155)),
+                    label: Text('#$t', style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    onPressed: () {
+                      setState(() => _selectedTag = t);
+                      _loadDocuments();
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -589,34 +670,74 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
               Wrap(
                 spacing: 6,
                 runSpacing: 4,
-                children: doc.tags
-                    .map((t) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0284C7).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
-                          ),
-                          child: Text('#$t', style: const TextStyle(fontSize: 11, color: Color(0xFF38BDF8))),
-                        ))
-                    .toList(),
+                children: doc.tags.map((t) {
+                  final isCurrentTag = _selectedTag == t;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      setState(() {
+                        _selectedTag = isCurrentTag ? null : t;
+                      });
+                      _loadDocuments();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isCurrentTag
+                            ? const Color(0xFF0284C7)
+                            : const Color(0xFF0284C7).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCurrentTag ? Colors.white : const Color(0xFF38BDF8).withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Text(
+                        '#$t',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isCurrentTag ? FontWeight.bold : FontWeight.normal,
+                          color: isCurrentTag ? Colors.white : const Color(0xFF38BDF8),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
 
             if (doc.locationLabel != null && doc.locationLabel!.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.place_outlined, size: 14, color: Color(0xFF10B981)),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Vị trí: ${doc.locationLabel}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF10B981)),
-                      overflow: TextOverflow.ellipsis,
+              InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: (doc.latitude != null && doc.longitude != null)
+                    ? () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MapScreen(
+                              mode: MapScreenMode.viewDocuments,
+                              documents: [doc],
+                              initialLocation: null,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
+                child: Row(
+                  children: [
+                    const Icon(Icons.place_outlined, size: 14, color: Color(0xFF10B981)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Vị trí: ${doc.locationLabel}${doc.latitude != null ? ' (Bấm xem bản đồ)' : ''}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF10B981)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                    if (doc.latitude != null && doc.longitude != null)
+                      const Icon(Icons.open_in_new_rounded, size: 13, color: Color(0xFF10B981)),
+                  ],
+                ),
               ),
             ],
 
