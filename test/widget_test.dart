@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:th1/main.dart';
 import 'package:th1/models/document_item.dart';
+import 'package:th1/screens/map_screen.dart';
 
 void main() {
   testWidgets('App khởi động thành công vào màn hình Login', (WidgetTester tester) async {
@@ -91,5 +93,48 @@ void main() {
     expect(fromMap.latitude, 21.028511);
     expect(fromMap.longitude, 105.854167);
     expect(fromMap.tags, ['cntt', 'ctdl']);
+  });
+
+  testWidgets('MapScreen hiển thị ở chế độ Ghim vị trí (pickLocation)', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MapScreen(mode: MapScreenMode.pickLocation),
+      ),
+    );
+    expect(find.text('Ghim vị trí tài liệu trên bản đồ'), findsOneWidget);
+    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsOneWidget);
+    expect(find.byIcon(Icons.remove), findsOneWidget);
+  });
+
+  testWidgets('MapScreen hiển thị ở chế độ Xem tài liệu (viewDocuments)', (WidgetTester tester) async {
+    final now = DateTime.now();
+    final docs = [
+      DocumentItem(
+        id: 'doc-1',
+        ownerId: 'user-1',
+        title: 'Tài liệu A',
+        subject: 'Toán',
+        docType: 'bai_giang',
+        author: 'GV A',
+        year: 2024,
+        createdAt: now,
+        updatedAt: now,
+        latitude: 21.0285,
+        longitude: 105.8542,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MapScreen(
+          mode: MapScreenMode.viewDocuments,
+          documents: docs,
+        ),
+      ),
+    );
+
+    expect(find.text('Bản đồ vị trí tài liệu (1)'), findsOneWidget);
+    expect(find.text('Toán'), findsOneWidget);
   });
 }

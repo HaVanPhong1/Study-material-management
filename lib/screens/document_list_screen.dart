@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/document_item.dart';
 import '../services/auth_service.dart';
@@ -498,7 +499,7 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: badgeColor.withOpacity(0.3)),
+        side: BorderSide(color: badgeColor.withValues(alpha: 0.3)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -577,11 +578,44 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
                       }
                     } else if (val == 'download') {
                       _downloadFile(doc);
+                    } else if (val == 'map') {
+                      if (doc.latitude != null && doc.longitude != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MapScreen(
+                              mode: MapScreenMode.viewDocuments,
+                              documents: [doc],
+                              initialLocation: LatLng(doc.latitude!, doc.longitude!),
+                            ),
+                          ),
+                        );
+                      } else {
+                        // Mở màn hình sửa để ghim vị trí
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => EditDocumentScreen(document: doc)),
+                        );
+                        if (res == true) _loadDocuments();
+                      }
                     } else if (val == 'delete') {
                       _deleteDocument(doc);
                     }
                   },
                   itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'map',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.map_rounded, color: Color(0xFF10B981), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            doc.latitude != null ? 'Xem vị trí Google Maps' : 'Ghim vị trí Google Maps',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
                     if (doc.storagePath != null && doc.storagePath!.isNotEmpty)
                       PopupMenuItem(
                         value: 'download',
@@ -709,33 +743,42 @@ class _DocumentListScreenState extends State<DocumentListScreen> {
               const SizedBox(height: 6),
               InkWell(
                 borderRadius: BorderRadius.circular(6),
-                onTap: (doc.latitude != null && doc.longitude != null)
-                    ? () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MapScreen(
-                              mode: MapScreenMode.viewDocuments,
-                              documents: [doc],
-                              initialLocation: null,
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
+                onTap: () async {
+                  if (doc.latitude != null && doc.longitude != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MapScreen(
+                          mode: MapScreenMode.viewDocuments,
+                          documents: [doc],
+                          initialLocation: LatLng(doc.latitude!, doc.longitude!),
+                        ),
+                      ),
+                    );
+                  } else {
+                    final res = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => EditDocumentScreen(document: doc)),
+                    );
+                    if (res == true) _loadDocuments();
+                  }
+                },
                 child: Row(
                   children: [
                     const Icon(Icons.place_outlined, size: 14, color: Color(0xFF10B981)),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        'Vị trí: ${doc.locationLabel}${doc.latitude != null ? ' (Bấm xem bản đồ)' : ''}',
+                        'Vị trí: ${doc.locationLabel}${doc.latitude != null ? ' (Bấm xem Google Maps)' : ' (Chưa có GPS - Bấm ghim)'}',
                         style: const TextStyle(fontSize: 12, color: Color(0xFF10B981)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (doc.latitude != null && doc.longitude != null)
-                      const Icon(Icons.open_in_new_rounded, size: 13, color: Color(0xFF10B981)),
+                    Icon(
+                      doc.latitude != null ? Icons.open_in_new_rounded : Icons.add_location_alt_outlined,
+                      size: 13,
+                      color: const Color(0xFF10B981),
+                    ),
                   ],
                 ),
               ),
