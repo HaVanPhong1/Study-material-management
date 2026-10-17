@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quản lý Tài liệu Học tập — Kiến trúc Cashew</title>
+
+<!--
+  GIAO DIỆN WEB — nằm ở TẦNG TRÌNH BÀY (Presentation) của Kiến trúc Cashew.
+
+  Nguyên tắc được giữ trong file này:
+    - HTML/CSS/JS thuần, KHÔNG thêm framework, KHÔNG cần build step.
+    - File này CHỈ gọi API, KHÔNG chứa quy tắc nghiệp vụ.
+      Mọi kiểm tra hợp lệ (năm, trùng lặp, trường bắt buộc) đều do tầng
+      nghiệp vụ/Schema phía server thực hiện — giao diện chỉ hiển thị kết quả.
+    - Mã lỗi 404 / 409 / 422 do server trả về được ánh xạ sang thông báo tiếng Việt.
+-->
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --ink: #1c2333;
+    --muted: #6b7280;
+    --line: #e3e6ee;
+    --brand: #2f5bea;
+    --brand-soft: #eef2ff;
+    --danger: #d93843;
+    --danger-soft: #fdecee;
+    --ok: #12855f;
+    --ok-soft: #e6f6f0;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px rgba(16, 24, 40, .06);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+
+  header {
+    background: linear-gradient(120deg, #2f5bea, #6b3fe4);
+    color: #fff;
+    padding: 22px 0 26px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+  header h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: .2px; }
+  header p { margin: 0; opacity: .9; font-size: 13.5px; }
+  header a { color: #fff; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    margin-top: -14px;
+    padding-bottom: 48px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 18px;
+  }
+  .card + .card { margin-top: 20px; }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--muted);
+  }
+
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 5px; }
+  label:first-of-type { margin-top: 0; }
+
+  input, select {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit;
+    background: #fff;
+    color: var(--ink);
+  }
+  input:focus, select:focus {
+    outline: 2px solid var(--brand-soft);
+    border-color: var(--brand);
+  }
+  input::placeholder { color: #a3a8b5; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  .btns { display: flex; gap: 10px; margin-top: 18px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+    background: var(--brand);
+    color: #fff;
+    transition: filter .15s ease;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .55; cursor: not-allowed; filter: none; }
+  button.ghost { background: #eceff6; color: var(--ink); }
+  button.link { background: none; color: var(--brand); padding: 4px 6px; }
+  button.danger { background: var(--danger-soft); color: var(--danger); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  tbody tr:hover { background: #fafbff; }
+  td.actions { white-space: nowrap; text-align: right; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .meta small { color: var(--muted); }
+
+  .empty { padding: 28px 8px; text-align: center; color: var(--muted); }
+
+  /* Thông báo: giao diện chỉ hiển thị, không tự quyết định lỗi là gì */
+  #toast {
+    position: fixed; right: 20px; bottom: 20px; max-width: 380px;
+    padding: 12px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
+    box-shadow: var(--shadow); opacity: 0; transform: translateY(8px);
+    transition: opacity .2s ease, transform .2s ease; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.ok { background: var(--ok-soft); color: var(--ok); }
+  #toast.err { background: var(--danger-soft); color: var(--danger); }
+
+  code { background: #f1f2f7; padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Quản lý Tài liệu Học tập</h1>
+    <p>Kiến trúc Cashew · 4 tầng tách biệt · <a href="/docs">Tài liệu API</a></p>
+  </div>
+</header>
+
+<main class="wrap grid">
+
+  <!-- ============ CỘT TRÁI: THÊM / SỬA ============ -->
+  <section class="card" id="form-card">
+    <h2 id="form-title">Thêm tài liệu mới</h2>
+
+    <form id="doc-form" novalidate>
+      <label for="f-title">Tiêu đề <span style="color:var(--danger)">*</span></label>
+      <input id="f-title" name="title" maxlength="200" placeholder="VD: Giải tích 1 - Chương 3: Đạo hàm" required>
+
+      <label for="f-subject">Môn học <span style="color:var(--danger)">*</span></label>
+      <input id="f-subject" name="subject" maxlength="120" placeholder="VD: Toán học" required>
+
+      <div class="row2">
+        <div>
+          <label for="f-type">Loại tài liệu <span style="color:var(--danger)">*</span></label>
+          <select id="f-type" name="doc_type">
+            <option value="bai_giang">Bài giảng</option>
+            <option value="bai_tap">Bài tập</option>
+            <option value="tai_lieu_tham_khao">Tài liệu tham khảo</option>
+            <option value="de_thi">Đề thi</option>
+          </select>
+        </div>
+        <div>
+          <label for="f-year">Năm <span style="color:var(--danger)">*</span></label>
+          <input id="f-year" name="year" type="number" min="1990" max="2100" value="2026" required>
+        </div>
+      </div>
+
+      <label for="f-author">Tác giả <span style="color:var(--danger)">*</span></label>
+      <input id="f-author" name="author" maxlength="120" placeholder="VD: Nguyễn Văn A" required>
+
+      <label for="f-url">Đường dẫn tệp (không bắt buộc)</label>
+      <input id="f-url" name="file_url" placeholder="https://example.com/bao-cao.pdf">
+
+      <div class="btns">
+        <button type="submit" id="btn-submit">Thêm tài liệu</button>
+        <button type="button" class="ghost" id="btn-cancel" hidden>Hủy sửa</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ CỘT PHẢI: TÌM KIẾM + KẾT QUẢ ============ -->
+  <div>
+    <section class="card">
+      <h2>Tìm kiếm &amp; lọc</h2>
+      <form id="search-form">
+        <div class="row2">
+          <div>
+            <label for="q-keyword">Từ khoá (tên / môn / tác giả)</label>
+            <input id="q-keyword" placeholder="VD: giáo trình">
+          </div>
+          <div>
+            <label for="q-subject">Môn học</label>
+            <input id="q-subject" placeholder="VD: Toán học">
+          </div>
+        </div>
+        <div class="row3">
+          <div>
+            <label for="q-type">Loại</label>
+            <select id="q-type">
+              <option value="">Tất cả</option>
+              <option value="bai_giang">Bài giảng</option>
+              <option value="bai_tap">Bài tập</option>
+              <option value="tai_lieu_tham_khao">Tài liệu tham khảo</option>
+              <option value="de_thi">Đề thi</option>
+            </select>
+          </div>
+          <div>
+            <label for="q-from">Năm từ</label>
+            <input id="q-from" type="number" min="1990" max="2100" placeholder="2020">
+          </div>
+          <div>
+            <label for="q-to">Năm đến</label>
+            <input id="q-to" type="number" min="1990" max="2100" placeholder="2026">
+          </div>
+        </div>
+        <div class="btns">
+          <button type="submit">Tìm kiếm</button>
+          <button type="button" class="ghost" id="btn-reset">Xoá điều kiện</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Danh sách tài liệu</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Tiêu đề</th><th>Môn</th><th>Loại</th><th>Tác giả</th><th>Năm</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="empty" class="empty" hidden>Chưa có tài liệu nào khớp điều kiện tìm kiếm.</div>
+      <div class="meta">
+        <small id="count-info">—</small>
+        <span>
+          <button type="button" class="link" id="btn-prev">‹ Trước</button>
+          <button type="button" class="link" id="btn-next">Sau ›</button>
+        </span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  "use strict";
+
+  /* ============================================================
+     PHẦN 1 — GIAO TIẾP VỚI TẦNG TRÌNH BÀY (API)
+     Giao diện chỉ gửi yêu cầu và hiển thị kết quả.
+     KHÔNG có quy tắc nghiệp vụ nào nằm trong file này.
+     ============================================================ */
+
+  const API = "/api/documents";
+
+  /** Lời gọi API có xử lý lỗi thống nhất. */
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+
+    if (response.status === 204) return null;
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      // Mã lỗi do tầng nghiệp vụ quyết định; giao diện chỉ dịch sang thông báo dễ hiểu.
+      const message = {
+        DOCUMENT_NOT_FOUND: "Không tìm thấy tài liệu (có thể đã bị xoá).",
+        DUPLICATE_DOCUMENT: "Tài liệu trùng tiêu đề và môn học đã tồn tại.",
+        INVALID_DOCUMENT: "Dữ liệu không hợp lệ.",
+      }[data.code] || data.message || "Lỗi không xác định.";
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("doc-form");
+  const rows = $("rows");
+  const toast = $("toast");
+
+  let editingId = null;   // null = đang thêm mới; có giá trị = đang sửa
+  let offset = 0;         // vị trí trang hiện tại
+  const limit = 10;
+  let total = 0;
+
+  function notify(message, kind) {
+    toast.textContent = message;
+    toast.className = "show " + kind;
+    clearTimeout(notify.timer);
+    notify.timer = setTimeout(() => (toast.className = kind), 3200);
+  }
+
+  /* ============================================================
+     PHẦN 2 — HIỂN THỊ KẾT QUẢ TÌM KIẾM
+     ============================================================ */
+
+  async function loadDocuments() {
+    const params = new URLSearchParams();
+    const keyword = $("q-keyword").value.trim();
+    const subject = $("q-subject").value.trim();
+    const docType = $("q-type").value;
+    const yearFrom = $("q-from").value.trim();
+    const yearTo = $("q-to").value.trim();
+
+    if (keyword) params.set("keyword", keyword);
+    if (subject) params.set("subject", subject);
+    if (docType) params.set("doc_type", docType);
+    if (yearFrom) params.set("year_from", yearFrom);
+    if (yearTo) params.set("year_to", yearTo);
+    params.set("limit", limit);
+    params.set("offset", offset);
+
+    try {
+      const data = await api(`${API}?${params}`);
+      total = data.total;
+      renderRows(data.items);
+      renderCount();
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  }
+
+  function renderRows(items) {
+    rows.innerHTML = "";
+    $("empty").hidden = items.length > 0;
+
+    for (const doc of items) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong></strong><br><small style="color:var(--muted)"></small></td>
+        <td></td>
+        <td><span class="tag"></span></td>
+        <td></td>
+        <td></td>
+        <td class="actions">
+          <button class="link" data-act="edit">Sửa</button>
+          <button class="link danger" data-act="delete">Xoá</button>
+        </td>`;
+
+      // Gán nội dung bằng textContent để tránh HTML injection từ dữ liệu người dùng.
+      tr.querySelector("strong").textContent = doc.title;
+      tr.querySelector("small").textContent = doc.file_url || "";
+      tr.children[1].textContent = doc.subject;
+      tr.querySelector(".tag").textContent = doc.doc_type_label;
+      tr.children[3].textContent = doc.author;
+      tr.children[4].textContent = doc.year;
+
+      tr.querySelector('[data-act="edit"]').onclick = () => startEdit(doc);
+      tr.querySelector('[data-act="delete"]').onclick = () => removeDocument(doc);
+
+      rows.appendChild(tr);
+    }
+  }
+
+  function renderCount() {
+    const from = total === 0 ? 0 : offset + 1;
+    const to = Math.min(offset + limit, total);
+    $("count-info").textContent =
+      total === 0 ? "Không có kết quả" : `Hiển thị ${from}–${to} trên tổng ${total} tài liệu`;
+    $("btn-prev").disabled = offset === 0;
+    $("btn-next").disabled = offset + limit >= total;
+  }
+
+  /* ============================================================
+     PHẦN 3 — THÊM / SỬA / XOÁ (gọi đúng 5 endpoint của API)
+     ============================================================ */
+
+  function readForm() {
+    return {
+      title: $("f-title").value,
+      subject: $("f-subject").value,
+      doc_type: $("f-type").value,
+      author: $("f-author").value,
+      year: Number($("f-year").value),
+      file_url: $("f-url").value.trim() || null,
+    };
+  }
+
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const button = $("btn-submit");
+    const payload = readForm();
+    button.disabled = true;
+
+    try {
+      if (editingId) {
+        // Cập nhật một phần: chỉ gửi các trường người dùng đã nhập.
+        await api(`${API}/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        notify("Đã cập nhật tài liệu.", "ok");
+        stopEdit();
+      } else {
+        await api(API, { method: "POST", body: JSON.stringify(payload) });
+        notify("Đã thêm tài liệu mới.", "ok");
+        form.reset();
+        $("f-year").value = new Date().getFullYear();
+      }
+      await loadDocuments();
+    } catch (error) {
+      notify(error.message, "err");
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  function startEdit(doc) {
+    editingId = doc.id;
+    $("f-title").value = doc.title;
+    $("f-subject").value = doc.subject;
+    $("f-type").value = doc.doc_type;
+    $("f-author").value = doc.author;
+    $("f-year").value = doc.year;
+    $("f-url").value = doc.file_url || "";
+
+    $("form-title").textContent = "Cập nhật tài liệu";
+    $("btn-submit").textContent = "Lưu thay đổi";
+    $("btn-cancel").hidden = false;
+    $("form-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function stopEdit() {
+    editingId = null;
+    form.reset();
+    $("f-year").value = new Date().getFullYear();
+    $("form-title").textContent = "Thêm tài liệu mới";
+    $("btn-submit").textContent = "Thêm tài liệu";
+    $("btn-cancel").hidden = true;
+  }
+
+  async function removeDocument(doc) {
+    if (!confirm(`Xoá tài liệu "${doc.title}"?`)) return;
+    try {
+      await api(`${API}/${doc.id}`, { method: "DELETE" });
+      notify("Đã xoá tài liệu.", "ok");
+      if (rows.children.length === 1 && offset > 0) offset -= limit;
+      await loadDocuments();
+    } catch (error) {
+      notify(error.message, "err");
+    }
+  }
+
+  /* ============================================================
+     PHẦN 4 — SỰ KIỆN
+     ============================================================ */
+
+  $("btn-cancel").onclick = stopEdit;
+  $("search-form").onsubmit = (event) => { event.preventDefault(); offset = 0; loadDocuments(); };
+  $("btn-reset").onclick = () => {
+    $("search-form").reset();
+    offset = 0;
+    loadDocuments();
+  };
+  $("btn-prev").onclick = () => { offset = Math.max(0, offset - limit); loadDocuments(); };
+  $("btn-next").onclick = () => { if (offset + limit < total) { offset += limit; loadDocuments(); } };
+
+  loadDocuments();
+</script>
+</body>
+</html>
