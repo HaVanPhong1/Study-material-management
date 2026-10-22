@@ -113,24 +113,68 @@ class DocumentItem {
   }
 }
 
-/// Gợi ý tài liệu của người khác có cùng tag hoặc môn học.
-/// ponytail: overlap count, không học máy. Đổi khi cần ranking thật.
+/// Gợi ý tài liệu thông minh dựa trên:
+/// - Trùng lặp Tag (trọng số cao: 2 điểm/tag)
+/// - Trùng lặp Môn học (trọng số: 3 điểm)
+/// - Trùng lặp Loại tài liệu (trọng số: 1 điểm)
+/// Nếu người dùng chưa có tài liệu nào, gợi ý các tài liệu mới nhất hoặc phổ biến nhất.
 List<DocumentItem> recommendDocuments(List<DocumentItem> all, String userId, {int limit = 3}) {
-  final mine = all.where((d) => d.ownerId == userId);
-  final tags = mine.expand((d) => d.tags).map((t) => t.toLowerCase()).toSet();
-  final subjects = mine.map((d) => d.subject.toLowerCase()).toSet();
-  final scored = <(DocumentItem, int)>[];
-  for (final doc in all) {
-    if (doc.ownerId == userId) continue;
-    var score = 0;
-    for (final tag in doc.tags) {
-      if (tags.contains(tag.toLowerCase())) score++;
-    }
-    if (subjects.contains(doc.subject.toLowerCase())) score++;
-    if (score > 0) scored.add((doc, score));
+  final mine = all.where((d) => d.ownerId == userId).toList();
+  final otherDocs = all.where((d) => d.ownerId != userId).toList();
+
+  if (otherDocs.isEmpty) return [];
+
+  // Nếu người dùng chưa đăng tải tài liệu nào, gợi ý các tài liệu mới nhất
+  if (mine.isEmpty) {
+    final sorted = List<DocumentItem>.from(otherDocs)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return sorted.take(limit).toList();
   }
+
+  final userTags = mine.expand((d) => d.tags).map((t) => t.toLowerCase()).toSet();
+  final userSubjects = mine.map((d) => d.subject.toLowerCase()).toSet();
+  final userDocTypes = mine.map((d) => d.docType.toLowerCase()).toSet();
+
+  final scored = <(DocumentItem, double)>[];
+
+  for (final doc in otherDocs) {
+    double score = 0.0;
+    
+    // Điểm tag (2 điểm cho mỗi tag trùng)
+    for (final tag in doc.tags) {
+      if (userTags.contains(tag.toLowerCase())) {
+        score += 2.0;
+      }
+    }
+
+    // Điểm môn học (3 điểm nếu trùng môn)
+    if (userSubjects.contains(doc.subject.toLowerCase())) {
+      score += 3.0;
+    }
+
+    // Điểm loại tài liệu (1 điểm nếu trùng loại)
+    if (userDocTypes.contains(doc.docType.toLowerCase())) {
+      score += 1.0;
+    }
+
+    if (score > 0) {
+      scored.add((doc, score));
+    }
+  }
+
+  // Sắp xếp theo điểm giảm dần
   scored.sort((a, b) => b.$2.compareTo(a.$2));
-  return scored.take(limit).map((e) => e.$1).toList();
+  
+  var results = scored.take(limit).map((e) => e.$1).toList();
+
+  // Nếu không có tài liệu nào khớp điểm (>0), bổ sung tài liệu mới nhất
+  if (results.isEmpty) {
+    final sorted = List<DocumentItem>.from(otherDocs)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    results = sorted.take(limit).toList();
+  }
+
+  return results;
 }
 
 List<String> parseTags(String raw) {
